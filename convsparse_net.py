@@ -12,43 +12,6 @@ from common import conv as dp_conv
 from common import flip
 
 
-
-class SparseConvAE(nn.Module):
-    
-    def __init__(self, num_input_channels=3, num_output_channels=3,
-                 kc = 64, ks=3, ista_iters=3, iter_wieght_share=True,
-                 pad='reflection', norm_weights=True, last=False):
-
-        super(SparseConvAE, self).__init__()
-
-        self.lista_encode = LISTAConvDictADMM(
-            num_input_channels=num_input_channels, num_output_channels=num_output_channels,
-            kc =kc, ks=ks, ista_iters=ista_iters, iter_wieght_share=iter_wieght_share,
-            pad=pad, norm_weights=norm_weights
-        )
-        self.lista_decode = dp_conv(
-            kc,
-            num_input_channels,
-            ks,
-            stride=1,
-            bias=False,
-            pad=pad
-        )
-        self.last = last
-
-    def forward(self, inputs):
-#        print('thrsh mean %f'%np.mean(self.lista_encode.softthrsh._lambd.clamp(0,1).cpu().data.numpy()))
-        non_zero_cnt = np.count_nonzero(inputs.cpu().data.numpy())
-#        print('non zero count: {}'.format(non_zero_cnt))
-        sparse_code = self.lista_encode(inputs)
-#        non_zero_cnt = np.count_nonzero(sparse_code.cpu().data.numpy())
-        result = self.lista_decode(sparse_code)
-#        non_zero_cnt = np.count_nonzero(result.cpu().data.numpy())
-        if self.last:
-            return result
-        else:
-            return result + inputs
-    
 #TODO: 
 #      1. Add mask as input.
 #      2. Add unit norm to filters?
@@ -128,7 +91,7 @@ class LISTAConvDictADMM(nn.Module):
     def forward(self, inputs):
         sc = self.forward_enc(inputs)
         outputs = self.forward_dec(sc)
-        return outputs
+        return outputs, sc
 
 class SoftshrinkTrainable(nn.Module):
     """

@@ -10,7 +10,7 @@ def to_np(_x): return _x.data.cpu().numpy()
 
 def I(_x): return _x
 
-def normilize(_x, _val=255): return _x / _val
+def normalize(_x, _val=255): return _x / _val
 
 def nhwc_to_nchw(_x, keep_dims=True): 
     if len(_x.shape) == 3 and (_x.shape[-1] == 1 or _x.shape[-1] == 3): #unsqueeze N dim
@@ -54,7 +54,6 @@ def init_model_dir(path, name):
     else:
         return act_fun()
 
-
 def flip(x, dim):
     dim = x.dim() + dim if dim < 0 else dim
     inds = tuple(slice(None, None) if i != dim
@@ -64,7 +63,6 @@ def flip(x, dim):
 
 def bn(num_features):
     return nn.BatchNorm2d(num_features)
-
 
 def conv(in_f, out_f, kernel_size, stride=1, bias=True, pad='zero', downsample_mode='stride'):
     downsampler = None
@@ -77,7 +75,6 @@ def conv(in_f, out_f, kernel_size, stride=1, bias=True, pad='zero', downsample_m
         else:
             assert False
         stride = 1
-
     padder = None
     to_pad = int((kernel_size - 1) / 2)
     if pad == 'reflection' and False:
@@ -85,31 +82,29 @@ def conv(in_f, out_f, kernel_size, stride=1, bias=True, pad='zero', downsample_m
         to_pad = 0
 
     convolver = nn.Conv2d(in_f, out_f, kernel_size, stride, padding=to_pad, bias=bias)
-
-
     layers = filter(lambda x: x is not None, [padder, convolver, downsampler])
     return nn.Sequential(*layers)
 
 def gaussian(ins, is_training, mean, stddev):
     if is_training:
-   #     noise = Variable(ins.data.new(ins.size()).normal_(mean, stddev))
         noise = stddev * torch.randn_like(ins) + mean
         return ins + noise
     return ins
 
 #TODO(hillel): this is dangrouse NO default factor val!!!
-def reconsturction_loss(ssim_factor=0.2, use_cuda=True):
-    from pytorch_msssim import MSSSIM, SSIM
+def get_criterion(use_cuda=True, factor=0.1):
 
-    msssim = SSIM()#MSSSIM()
     l1 = nn.L1Loss()
+    l2 = nn.MSELoss()
+
     if use_cuda:
-        msssim = msssim.cuda()
+        l2 = l2.cuda()
         l1 = l1.cuda()
-    if ssim_factor > 0:
-       return  lambda x, xn: (1 - ssim_factor) * l1(x, xn)  + ssim_factor * (1 - msssim(x, xn))
-    else:
-        return lambda x, xn: l1(x, xn)
+    
+    def total_loss(inputs, target, sc_in, sc_tar):
+        return l1(inputs, target) * (1 - factor) + l2(sc_in, sc_tar) * (1 - factor)
+    return total_loss
+
 
 def psnr(im, recon, verbose=False):
     im.shape
