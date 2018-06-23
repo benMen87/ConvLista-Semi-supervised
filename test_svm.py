@@ -30,6 +30,9 @@ def plot_res(img, img_n, res, name, log_path):
     plt.clf()
    
 
+def load_model(args, saved_model_path):
+    pass
+
 def test(args, saved_model_path, noise, testset_path):
     
     def pre_process_fn(_x): return normilize(_x, 255) 

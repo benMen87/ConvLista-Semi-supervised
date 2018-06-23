@@ -111,6 +111,7 @@ def train(model, args):
                     running_loss / valid_every, _v_loss))
                 running_loss = 0
     return model_path, _valid_loss[-1]
+
 def build_model(args):
     model = LISTAConvDictADMM(
         num_input_channels=args['num_input_channels'],
@@ -136,15 +137,6 @@ def main(args_file):
     args['test_args']['load_path'] = model_path
     args['train_args']['final_loss'] = valid_loss
     arguments.logdictargs(os.path.join(log_dir, 'params.json'), args)
-
-    #res = test_denoise.test(args['model_args'],
-    #     model_path,
-    #     args['train_args']['noise'], 
-    #     args['test_args']['testset_path']
-    #    )
-    #arguments.logdictargs(os.path.join(log_dir, 'params.json'), args)
-    #for idx, ims in enumerate(res):
-    #   test_denoise.plot_res(ims[0], ims[1], ims[2], idx, args['train_args']['log_dir'])
 
 if __name__ == '__main__':
     import argparse
