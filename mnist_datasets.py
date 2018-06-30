@@ -24,7 +24,7 @@ def get_train_valid_loader(data_dir=DATA_PATH,
                            valid_size=0.1,
                            shuffle=True,
                            show_sample=False,
-                           num_workers=4,
+                           num_workers=1,
                            pin_memory=False):
 
 
@@ -78,10 +78,10 @@ def get_train_valid_loader(data_dir=DATA_PATH,
     return (train_loader, valid_loader)
 
 
-def get_test_loader(data_dir,
-                    batch_size,
+def get_test_loader(data_dir=DATA_PATH,
+                    batch_size=64,
                     shuffle=True,
-                    num_workers=4,
+                    num_workers=1,
                     pin_memory=False):
 
     # transforms.Normalize(

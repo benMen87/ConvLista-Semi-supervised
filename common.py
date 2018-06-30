@@ -92,7 +92,7 @@ def gaussian(ins, is_training, mean, stddev):
     return ins
 
 #TODO(hillel): this is dangrouse NO default factor val!!!
-def get_criterion(use_cuda=True, factor=0.1):
+def get_criterion(use_cuda=True, sc_factor=0.1):
 
     l1 = nn.L1Loss()
     l2 = nn.MSELoss()
@@ -102,7 +102,9 @@ def get_criterion(use_cuda=True, factor=0.1):
         l1 = l1.cuda()
     
     def total_loss(inputs, target, sc_in, sc_tar):
-        return l1(inputs, target) * (1 - factor) + l2(sc_in, sc_tar) * (1 - factor)
+        sc_in_embd = sc_in.mean(-1).mean(-1)
+        sc_tar_embd = sc_tar.mean(-1).mean(-1)
+        return l1(inputs, target) * (1 - sc_factor) + l2(sc_in_embd, sc_tar_embd) * (sc_factor)
     return total_loss
 
 
@@ -166,4 +168,3 @@ def save_eval(path, model):
 def load_eval(path, model):
     model.load_state_dict(torch.load(path)['model'])
     model.eval()
-
