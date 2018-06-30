@@ -67,7 +67,7 @@ def train(model, args):
     
     optimizer = optim.Adam(model.parameters(), lr=args['learning_rate'])
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, 'min', verbose=True)
-    criterion = get_criterion(use_cuda=True, factor=args['sc_factor'])
+    criterion = get_criterion(use_cuda=True, sc_factor=args['sc_factor'])
     train_loader, valid_loader = get_train_valid_loader(batch_size=args['batch_size'], valid_size=0.01)
     print(args)
 
@@ -110,7 +110,8 @@ def train(model, args):
                 print("epoch {} train loss: {} valid loss: {}".format(e,
                     running_loss / valid_every, _v_loss))
                 running_loss = 0
-    return model_path, _valid_loss[-1]
+                return model_path, _valid_loss[-1]
+
 def build_model(args):
     model = LISTAConvDictADMM(
         num_input_channels=args['num_input_channels'],
@@ -124,7 +125,7 @@ def build_model(args):
         model = model.cuda()
     return model
 
-def main(args_file):
+def run(args_file):
     args = arguments.load_args(args_file)
     log_dir, save_dir = init_model_dir(args['train_args']['log_dir'], args['train_args']['name'])
     arguments.logdictargs(os.path.join(log_dir, 'params.json'), args)
@@ -135,16 +136,11 @@ def main(args_file):
 
     args['test_args']['load_path'] = model_path
     args['train_args']['final_loss'] = valid_loss
-    arguments.logdictargs(os.path.join(log_dir, 'params.json'), args)
 
-    #res = test_denoise.test(args['model_args'],
-    #     model_path,
-    #     args['train_args']['noise'], 
-    #     args['test_args']['testset_path']
-    #    )
-    #arguments.logdictargs(os.path.join(log_dir, 'params.json'), args)
-    #for idx, ims in enumerate(res):
-    #   test_denoise.plot_res(ims[0], ims[1], ims[2], idx, args['train_args']['log_dir'])
+    args_fp = os.path.join(log_dir, 'params.json')
+    arguments.logdictargs(args_fp, args)
+    return args_fp
+
 
 if __name__ == '__main__':
     import argparse
@@ -152,4 +148,4 @@ if __name__ == '__main__':
     parser.add_argument('--arg_file', default='')
     arg_file = parser.parse_args().arg_file
 
-    main(arg_file)
+    run(arg_file)

@@ -24,7 +24,7 @@ def get_train_valid_loader(data_dir=DATA_PATH,
                            valid_size=0.1,
                            shuffle=True,
                            show_sample=False,
-                           num_workers=4,
+                           num_workers=1,
                            pin_memory=False):
 
 
@@ -78,10 +78,10 @@ def get_train_valid_loader(data_dir=DATA_PATH,
     return (train_loader, valid_loader)
 
 
-def get_test_loader(data_dir,
-                    batch_size,
+def get_test_loader(data_dir=DATA_PATH,
+                    batch_size=64,
                     shuffle=True,
-                    num_workers=4,
+                    num_workers=1,
                     pin_memory=False):
 
     # transforms.Normalize(
@@ -106,15 +106,15 @@ def get_test_loader(data_dir,
 
     return data_loader
 
-def split_mnist(path, ratio=0.1):
+def semisup_mnist(lbl_cnt=3000, path=DATA_PATH):
     transform = transforms.Compose([transforms.ToTensor()])
-    mnist = MNIST(path, train=True, download=True, transform=transform)
+    mnist = datasets.MNIST(path, train=True, download=True, transform=transform)
 
-    label_per_class = ratio * len(mnist) / 10
+    label_per_class = lbl_cnt // 10
     mnist_dict = dict([(i, [])for i in range(10)])
 
     for data, label in mnist:
-        mnist_dict[label].append(data)
+        mnist_dict[int(label)].append(data)
     for v in mnist_dict.itervalues():
         shuffle(v)
     
@@ -122,19 +122,28 @@ def split_mnist(path, ratio=0.1):
     l_data = []
     u_data = []
 
-    for label, data in mnist_dict:
+    for label, data in mnist_dict.items():
         l_data += data[:label_per_class]
         labels += ([label] * label_per_class)
         u_data += data[label_per_class:]
     
-    perm = torch.randperm(len(label_per_class) * 10)
+    perm = torch.randperm(label_per_class * 10)
     l_data = torch.stack(l_data)[perm]
-    labels = torch.stack(labels)[perm]
+    labels = torch.Tensor(labels)[perm]
     u_data = torch.stack(u_data)[torch.randperm(len(u_data))]
 
     labeled = TensorDataset(l_data, labels)
-    unlabeld = TensorDataset(u_data)
-    return (labeled, unlabeld)
+    unlabeled = TensorDataset(u_data)
+
+    dll = torch.utils.data.DataLoader(
+        labeled, batch_size=64, shuffle=False
+    )
+
+    dlu = torch.utils.data.DataLoader(
+        unlabeled, batch_size=64, shuffle=False
+    )
+
+    return (dll, dlu)
 
     
     
