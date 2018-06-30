@@ -12,7 +12,7 @@ def run(args_file):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--arg_file', default='embedding_args.json')
+    parser.add_argument('--arg_file', default='')
     arg_file = parser.parse_args().arg_file
 
     run(arg_file)

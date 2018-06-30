@@ -135,6 +135,7 @@ def run(args_file):
     model_path, valid_loss = train(model, args['train_args'])
 
     args['test_args']['load_path'] = model_path
+    args['test_args']['embedd_model_path'] = model_path
     args['train_args']['final_loss'] = valid_loss
 
     args_fp = os.path.join(log_dir, 'params.json')
