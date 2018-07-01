@@ -17,7 +17,7 @@ import matplotlib
 #matplotlib.use('agg')
 import matplotlib.pyplot as plt
 
-USE_CUDA = torch.cuda.is_available() and False
+USE_CUDA = torch.cuda.is_available()
 FILE_PATH = os.path.dirname(os.path.abspath(__file__))
 
 def add_noise(imgs, noise):
@@ -82,7 +82,7 @@ def train(model, args):
     _train_loss = []
     _valid_loss = []
     running_loss = 0
-    valid_every = 10#int(0.1 * len(train_loader))
+    valid_every = int(0.1 * len(train_loader))
 
     itr = 0
     for e in range(args['epoch']):
@@ -110,7 +110,7 @@ def train(model, args):
                 print("epoch {} train loss: {} valid loss: {}".format(e,
                     running_loss / valid_every, _v_loss))
                 running_loss = 0
-                return model_path, _valid_loss[-1]
+    return model_path, _valid_loss[-1]
 
 def build_model(args):
     model = LISTAConvDictADMM(
@@ -122,6 +122,7 @@ def build_model(args):
         iter_weight_share=args['iter_weight_share'],
     )
     if USE_CUDA:
+        print("here@@@@@@@@@@@@@")
         model = model.cuda()
     return model
 

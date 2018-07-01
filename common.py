@@ -166,5 +166,8 @@ def save_eval(path, model):
     torch.save(model.state_dict(), path)
 
 def load_eval(path, model):
-    model.load_state_dict(torch.load(path)['model'])
+    _model = torch.load(path)
+    if type(model) == dict:
+        _model = _model['model']
+    model.load_state_dict(_model)
     model.eval()

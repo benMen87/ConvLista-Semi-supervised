@@ -4,7 +4,7 @@
          "noise": 30,
          "epoch": 100,
          "batch_size": 5,
-         "sc_factor": 0.1,
+         "sc_factor": 0.5,
          "learning_rate": 1e-3,
          "log_dir": "./saved_models",
          "name": "unsupervised_train",
