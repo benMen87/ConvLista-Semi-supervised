@@ -115,7 +115,7 @@ def semisup_mnist(lbl_cnt=3000, path=DATA_PATH):
 
     for data, label in mnist:
         mnist_dict[int(label)].append(data)
-    for v in mnist_dict.itervalues():
+    for v in mnist_dict.values():
         shuffle(v)
     
     labels = []
