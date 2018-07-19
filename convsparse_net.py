@@ -12,9 +12,31 @@ from common import conv as dp_conv
 from common import flip
 
 
-#TODO: 
-#      1. Add mask as input.
-#      2. Add unit norm to filters?
+class LISTAConvDictMNISTSSL(nn.Module):
+    """Run use sparse prior with lista like model for SSL mnist task """
+    num_of_classes = 10
+
+    def __init__(self, embedding_model, embedding_size, hiddnen_size, downsample=2):
+        self.embedding_model = embedding_model
+        self.downsample_by = downsample
+        self.input_class_sz = embedding_size // (self.downsample_by ** 2)
+
+        self.classifier_model = nn.Sequential(
+           nn.linear(self.input_class_sz, hiddnen_size),
+           nn.ReLU(),
+           nn.linear(hiddnen_size, self.num_of_classes)
+        )
+
+    #TODO(hillel): for training we need  2 diffrent models for training and infrence...
+    def forward(self, inputs): 
+        _, embedding = self.embedding_model(inputs)
+        embedding_flatten = F.max_pool2d(embedding, 2).veiw(-1, self.input_class_sz)
+        logits = self.classifier_model(embedding_flatten)
+        return logits, embedding_flatten
+
+
+
+    
 
 class LISTAConvDictADMM(nn.Module):
     """
