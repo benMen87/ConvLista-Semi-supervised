@@ -44,6 +44,7 @@ def maybe_save_model(model, opt, schd, epoch, save_path, curr_val, other_values)
     if no_other_values(other_values) or curr_val <  min(other_values):
         print('saving model...')
         path = save_train(save_path, model, opt, schd, epoch)
+        print("new checkpoint at %s"%path)
         clean(save_path, save_count=10)
     return path
 
@@ -103,9 +104,11 @@ def train(model, args):
                 _v_loss = run_valid(model, valid_loader,
                         criterion, args['save_dir'], args['noise'])
                 scheduler.step(_v_loss)
-                model_path = maybe_save_model(model, optimizer,
+                _model_path = maybe_save_model(model, optimizer,
                         scheduler, e, args['save_dir'],
                         _v_loss, _valid_loss)
+                if _model_path != '':
+                    model_path = _model_path
                 _valid_loss.append(_v_loss)
                 print("epoch {} train loss: {} valid loss: {}".format(e,
                     running_loss / valid_every, _v_loss))
@@ -122,7 +125,6 @@ def build_model(args):
         iter_weight_share=args['iter_weight_share'],
     )
     if USE_CUDA:
-        print("here@@@@@@@@@@@@@")
         model = model.cuda()
     return model
 
@@ -138,9 +140,11 @@ def run(args_file):
     args['test_args']['load_path'] = model_path
     args['test_args']['embedd_model_path'] = model_path
     args['train_args']['final_loss'] = valid_loss
+    args['test_args']['log_dir'] = log_dir
 
     args_fp = os.path.join(log_dir, 'params.json')
     arguments.logdictargs(args_fp, args)
+    print("writing {} to  {}".format(args_fp, args))
     return args_fp
 
 

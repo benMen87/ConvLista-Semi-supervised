@@ -39,21 +39,6 @@ def init_model_dir(path, name):
     os.mkdir(os.path.join(full_path, 'saved'))
     return full_path, os.path.join(full_path, 'saved')
 
-    '''
-        Either string defining an activation function or module (e.g. nn.ReLU)
-    '''
-    if isinstance(act_fun, str):
-        if act_fun == 'LeakyReLU':
-            return nn.LeakyReLU(0.2, inplace=True)
-        elif act_fun == 'ELU':
-            return nn.ELU()
-        elif act_fun == 'none':
-            return nn.Sequential()
-        else:
-            assert False
-    else:
-        return act_fun()
-
 def flip(x, dim):
     dim = x.dim() + dim if dim < 0 else dim
     inds = tuple(slice(None, None) if i != dim
@@ -167,7 +152,7 @@ def save_eval(path, model):
 
 def load_eval(path, model):
     _model = torch.load(path)
-    if type(model) == dict:
+    if 'model' in _model.keys():
         _model = _model['model']
     model.load_state_dict(_model)
     model.eval()
