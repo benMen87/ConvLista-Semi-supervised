@@ -106,7 +106,7 @@ def get_test_loader(data_dir=DATA_PATH,
 
     return data_loader
 
-def semisup_mnist(lbl_cnt=3000, path=DATA_PATH):
+def semisup_mnist(lbl_cnt=3000, path=DATA_PATH, batch_size=64):
     transform = transforms.Compose([transforms.ToTensor()])
     mnist = datasets.MNIST(path, train=True, download=True, transform=transform)
 
@@ -136,11 +136,11 @@ def semisup_mnist(lbl_cnt=3000, path=DATA_PATH):
     unlabeled = TensorDataset(u_data)
 
     dll = torch.utils.data.DataLoader(
-        labeled, batch_size=64, shuffle=False
+        labeled, batch_size=batch_size, shuffle=False
     )
 
     dlu = torch.utils.data.DataLoader(
-        unlabeled, batch_size=64, shuffle=False
+        unlabeled, batch_size=batch_size, shuffle=False
     )
 
     return (dll, dlu)

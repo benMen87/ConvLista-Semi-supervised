@@ -12,7 +12,7 @@ from common import save_train, load_train, clean
 from common import get_criterion, init_model_dir
 from torch.utils.data import DataLoader
 import arguments
-from  mnist_datasets import get_train_valid_loader, get_test_loader
+from  mnist_datasets import semisup_mnist, get_test_loader
 import matplotlib
 #matplotlib.use('agg')
 import matplotlib.pyplot as plt
@@ -69,10 +69,10 @@ def train(model, args):
     optimizer = optim.Adam(model.parameters(), lr=args['learning_rate'])
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, 'min', verbose=True)
     criterion = get_criterion(use_cuda=True, sc_factor=args['sc_factor'])
-    train_loader, valid_loader = get_train_valid_loader(batch_size=args['batch_size'], valid_size=0.01)
+    labeled_loader, unlabeled_loader = semisup_mnist(batch_size=args['batch_size'], lbl_cnt=args["label_count"])
     print(args)
 
-    print('train count: {}  valid count: {}'.format(len(train_loader), len(valid_loader)))
+    print('labeld count: {}  unlabeled count: {}'.format(len(labeled_loader), len(unlabeled_loader)))
 
     if args['load_path'] != '':
         ld_p = args['load_path']
@@ -83,7 +83,7 @@ def train(model, args):
     _train_loss = []
     _valid_loss = []
     running_loss = 0
-    valid_every = int(0.1 * len(train_loader))
+    valid_every = int(0.1 * len(labeled_loader)) #TODO(hillel): better idea than using labeled data as valid as well?
 
     itr = 0
     for e in range(args['epoch']):
