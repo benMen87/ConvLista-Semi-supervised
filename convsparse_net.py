@@ -16,15 +16,15 @@ class LISTAConvDictMNISTSSL(nn.Module):
     """Run use sparse prior with lista like model for SSL mnist task """
     num_of_classes = 10
 
-    def __init__(self, embedding_model, embedding_size, hiddnen_size, downsample=2):
+    def __init__(self, embedding_model, embedding_size, hidden_size, downsample=2):
         self.embedding_model = embedding_model
         self.downsample_by = downsample
         self.input_class_sz = embedding_size // (self.downsample_by ** 2)
 
         self.classifier_model = nn.Sequential(
-           nn.linear(self.input_class_sz, hiddnen_size),
+           nn.linear(self.input_class_sz, hidden_size),
            nn.ReLU(),
-           nn.linear(hiddnen_size, self.num_of_classes)
+           nn.linear(hidden_size, self.num_of_classes)
         )
 
     #TODO(hillel): for training we need  2 diffrent models for training and infrence...
