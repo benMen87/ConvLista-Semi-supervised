@@ -76,7 +76,7 @@ def gaussian(ins, is_training, mean, stddev):
         return ins + noise
     return ins
 
-#TODO(hillel): this is dangrouse NO default factor val!!!
+#TODO(hillel): remove the use of this funtion
 def get_criterion(use_cuda=True, sc_factor=0.1):
 
     l1 = nn.L1Loss()
@@ -87,10 +87,30 @@ def get_criterion(use_cuda=True, sc_factor=0.1):
         l1 = l1.cuda()
     
     def total_loss(inputs, target, sc_in, sc_tar):
-        sc_in_embd = sc_in.mean(-1).mean(-1)
-        sc_tar_embd = sc_tar.mean(-1).mean(-1)
+        sc_in_embd = sc_in
+        sc_tar_embd = sc_tar
         return l1(inputs, target) * (1 - sc_factor) + l2(sc_in_embd, sc_tar_embd) * (sc_factor)
     return total_loss
+
+def get_sup_criterion(use_cuda=True):
+    loss = nn.CrossEntropyLoss()
+    return lambda inputs, target: loss(inputs, target)
+
+
+def get_unsup_criterion(factors, use_cuda=True):
+    from itertools import cycle
+
+    if type(factors) is not list:
+        factors = [factors]
+
+    print(factors)
+   
+    l2 = nn.MSELoss()
+
+    def dist(out, target):
+        return l2(out, target)
+
+    return lambda values, targets:sum([dist(v, t) * l for v, t, l in  zip(values, targets, cycle(factors))])
 
 
 def psnr(im, recon, verbose=False):

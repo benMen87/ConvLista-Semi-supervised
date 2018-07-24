@@ -2,6 +2,7 @@ from __future__ import division
 import os 
 import sys
 import numpy as np
+from itertools import cycle
 import torch
 from torch import nn
 from torch import optim
@@ -9,7 +10,7 @@ from torch.optim import lr_scheduler
 from convsparse_net import LISTAConvDictADMM
 import common
 from common import save_train, load_train, clean
-from common import get_criterion, init_model_dir
+from common import get_sup_criterion, get_unsup_criterion, init_model_dir
 from torch.utils.data import DataLoader
 import arguments
 from  mnist_datasets import semisup_mnist, get_test_loader
@@ -24,18 +25,26 @@ def add_noise(imgs, noise):
     noise = common.normalize(noise)
     return common.gaussian(imgs, is_training=True, mean=0, stddev=noise)
 
-def step(model, img, img_n, optimizer=None, criterion=None):
-    if optimizer is not None: 
-       optimizer.zero_grad()
-    output, sc_in = model(img_n)
-    _, sc_target = model(img)
-    if criterion is not None:
-        loss = criterion(output, img, sc_in, sc_target.data)
-        if optimizer:
-            loss.backward()
-            optimizer.step()
-        return loss, output.cpu()
-    return output.cpu()
+def train_step(model, sup_criterion, unsup_criterion, noise_strength, x, y=None):
+    """
+    model - nn model to optimize
+    x, y - input and its label
+    u - unlabeld input
+    """
+    logits, embedding = model(x)
+
+
+    x_n = add_noise(x, noise_strength)
+    logits_n, embedding_n = model(x_n)
+    loss = unsup_criterion([logits, embedding], [logits_n.data, embedding_n.data])
+
+    if y is not None:
+        loss += sup_criterion(logits, y)
+
+    #loss.backward()
+    #optimizer.step()
+
+    return loss, output.cpu()
 
 def maybe_save_model(model, opt, schd, epoch, save_path, curr_val, other_values):
     path = ''
@@ -50,26 +59,27 @@ def maybe_save_model(model, opt, schd, epoch, save_path, curr_val, other_values)
 
 def run_valid(model, data_loader, criterion, logdir, noise):
     loss = 0
-    for img, _ in data_loader:
+    for x, y in data_loader:
+
         if USE_CUDA:
-            img = img.cuda()
-        img_n = add_noise(img, noise) 
+            x = x.cuda()
+            y = y.cuda()
 
-        _loss, _out = step(model, img, img_n, criterion=criterion)
+        _logits, _ = model(x) 
+        loss = criterion(_logits, target)
         loss += _loss.data
-
-    _, output = step(model, img, img_n, criterion=criterion)
-    np.savez(os.path.join(logdir, 'images'), IN=img.data.cpu().numpy(),
-        OUT=output.data.cpu().numpy(), NOISE=img_n.data.cpu().numpy())
-
     return float(loss) / len(data_loader)
 
 def train(model, args):
     
     optimizer = optim.Adam(model.parameters(), lr=args['learning_rate'])
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, 'min', verbose=True)
-    criterion = get_criterion(use_cuda=True, sc_factor=args['sc_factor'])
+    sup_criterion = get_sup_criterion(use_cuda=USE_CUDA)
+    unsup_criterion = get_unsup_criterion(args['unsup_factors'])
+
     labeled_loader, unlabeled_loader = semisup_mnist(batch_size=args['batch_size'], lbl_cnt=args["label_count"])
+    valid_loader = get_test_loader()
+
     print(args)
 
     print('labeld count: {}  unlabeled count: {}'.format(len(labeled_loader), len(unlabeled_loader)))
@@ -80,29 +90,44 @@ def train(model, args):
         load_train(ld_p, model, optimizer, scheduler)        
         print('Done!')
         
-    _train_loss = []
-    _valid_loss = []
-    running_loss = 0
+    _train_label_loss = []
+    _valid_unlabel_loss = []
+
+    running_label_loss = 0
+    running_unlabel_loss = 0
     valid_every = int(0.1 * len(labeled_loader)) #TODO(hillel): better idea than using labeled data as valid as well?
 
     itr = 0
     for e in range(args['epoch']):
         print('Epoch number {}'.format(e))
-        for img, _ in train_loader:
+        for (x, y), u in zip(cycle(labeled_loader), unlabeled_loader):
             itr += 1
 
             if USE_CUDA:
-                img = img.cuda()
+                x = x.cuda()
+                y = y.cuda()
+                u = u.cuda()
 
-            img_n = add_noise(img, args['noise'])
-            
-            _loss, _ = step(model, img, img_n, optimizer, criterion=criterion)
-            running_loss += float(_loss)
+
+            optimizer.zero_grad()
+
+            label_loss = train_step(model, sup_criterion, unsup_criterion, args['noise'], x, y)
+            unlabel_loss = train_step(model, sup_criterion, unsup_criterion, args['noise'], u)
+
+            _loss = label_loss + unlabel_loss
+           
+            _loss.backward()
+            optimizer.step()
+
+            running_label_loss += float(label_loss_loss)
+            running_unlabel_loss += float(label_unloss_loss)
 
             if itr % valid_every == 0:
-                _train_loss.append(running_loss / valid_every)
+                _train_label_loss.append(running_label_loss / valid_every)
+                _train_unlabel_loss.append(running_unlabel_loss / valid_every)
+
                 _v_loss = run_valid(model, valid_loader,
-                        criterion, args['save_dir'], args['noise'])
+                        sup_criterion, args['save_dir'], args['noise'])
                 scheduler.step(_v_loss)
                 _model_path = maybe_save_model(model, optimizer,
                         scheduler, e, args['save_dir'],
@@ -151,7 +176,7 @@ def run(args_file):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--arg_file', default='')
+    parser.add_argument('--arg_file', default='./default_ssl_e2e_args.json')
     arg_file = parser.parse_args().arg_file
 
     run(arg_file)
