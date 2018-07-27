@@ -22,9 +22,9 @@ class LISTAConvDictMNISTSSL(nn.Module):
         self.input_class_sz = embedding_size // (self.downsample_by ** 2)
 
         self.classifier_model = nn.Sequential(
-           nn.linear(self.input_class_sz, hidden_size),
+           nn.Linear(self.input_class_sz, hidden_size),
            nn.ReLU(),
-           nn.linear(hidden_size, self.num_of_classes)
+           nn.Linear(hidden_size, self.num_of_classes)
         )
 
     #TODO(hillel): for training we need  2 diffrent models for training and infrence...
