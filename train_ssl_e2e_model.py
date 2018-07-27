@@ -7,7 +7,7 @@ import torch
 from torch import nn
 from torch import optim
 from torch.optim import lr_scheduler
-from convsparse_net import LISTAConvDictADMM
+from convsparse_net import LISTAConvDictADMM, LISTAConvDictMNISTSSL
 import common
 from common import save_train, load_train, clean
 from common import get_sup_criterion, get_unsup_criterion, init_model_dir
@@ -148,6 +148,11 @@ def build_model(args):
         ks=args['ks'],
         ista_iters=args['ista_iters'],
         iter_weight_share=args['iter_weight_share'],
+    )
+    model = LISTAConvDictMNISTSSL(
+        embedding_model=model,
+        embedding_size=64,
+        hidden_size=1000
     )
     if USE_CUDA:
         model = model.cuda()
