@@ -135,9 +135,9 @@ def train(model, args):
                 _train_unlabel_loss.append(running_unlabel_loss / valid_every)
 
                 _v_loss, acc = run_valid(
-                    model, valid_loader,
-                    sup_criterion, args['save_dir'],
-                    args['noise']
+                    model,
+                    valid_loader,
+                    sup_criterion,
                 )
                 scheduler.step(_v_loss)
 
