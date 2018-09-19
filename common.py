@@ -52,6 +52,13 @@ def bn(num_features):
 def conv(in_f, out_f, kernel_size, stride=1, bias=True, pad='zero', downsample_mode='stride'):
     downsampler = None
 
+    class RemovePadder(nn.Module):
+        def __init__(self, to_pad):
+              super(RemovePadder, self).__init__()
+              self.to_pad = to_pad
+        def forward(self, inputs): 
+            return inputs[..., self.to_pad: -self.to_pad, self.to_pad: -self.to_pad]
+
     if stride != 1 and downsample_mode != 'stride':
         if downsample_mode == 'avg':
             downsampler = nn.AvgPool2d(stride, stride)
@@ -60,14 +67,17 @@ def conv(in_f, out_f, kernel_size, stride=1, bias=True, pad='zero', downsample_m
         else:
             assert False
         stride = 1
+
     padder = None
+    remove_padder = None
+
     to_pad = int((kernel_size - 1) / 2)
-    if pad == 'reflection' and False:
+    if pad == 'reflection':
         padder = nn.ReflectionPad2d(to_pad)
-        to_pad = 0
+        remove_padder = RemovePadder(to_pad)
 
     convolver = nn.Conv2d(in_f, out_f, kernel_size, stride, padding=to_pad, bias=bias)
-    layers = filter(lambda x: x is not None, [padder, convolver, downsampler])
+    layers = filter(lambda x: x is not None, [padder, convolver, remove_padder, downsampler])
     return nn.Sequential(*layers)
 
 def gaussian(ins, is_training, mean, stddev):
@@ -90,12 +100,12 @@ def get_criterion(use_cuda=True, sc_factor=0.1):
         sc_in_embd = sc_in
         sc_tar_embd = sc_tar
         return l1(inputs, target) * (1 - sc_factor) + l2(sc_in_embd, sc_tar_embd) * (sc_factor)
+
     return total_loss
 
 def get_sup_criterion(use_cuda=True):
     loss = nn.CrossEntropyLoss()
     return lambda inputs, target: loss(inputs, target)
-
 
 def get_unsup_criterion(factors, use_cuda=True):
     from itertools import cycle
@@ -103,15 +113,11 @@ def get_unsup_criterion(factors, use_cuda=True):
     if type(factors) is not list:
         factors = [factors]
 
-    print(factors)
-   
-    l2 = nn.MSELoss()
-
+    l2 = nn.L1Loss()
     def dist(out, target):
         return l2(out, target)
 
     return lambda values, targets:sum([dist(v, t) * l for v, t, l in  zip(values, targets, cycle(factors))])
-
 
 def psnr(im, recon, verbose=False):
     im.shape

@@ -1,18 +1,18 @@
 {
     "train_args":
      {
-         "noise": 30,
+         "noise": 100,
          "epoch": 100,
-         "batch_size": 5,
+         "batch_size": 64,
          "sc_factor": 0.5,
-         "learning_rate": 1e-4,
-         "embedd_type": "AVG",
+         "learning_rate": 1e-3,
+         "embedd_type": "PCA",
          "PCA_components": 32, 
          "log_dir": "./saved_models",
-         "name": "unsupervised_train",
+         "name": "6_label_PCA_in_64kc_10Noise",
          "load_path": "",
          "embedd_model_path": "",
-         "label_count": 3000
+         "label_count": 600
      },
      "model_args":
      {
@@ -20,13 +20,14 @@
          "num_output_channels": 1,
          "kc": 64, 
          "ks": 3,
-         "ista_iters": 30,
+         "ista_iters": 10,
          "iter_weight_share": true
      },
      "test_args":
      {
         "log_dir": "./saved_models",
-         "name": "semisupervised_test",
-         "load_path": ""
+        "name": "",
+        "embedd_model_path": ""
+
      }
 }

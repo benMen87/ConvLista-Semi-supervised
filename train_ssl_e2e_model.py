@@ -1,4 +1,3 @@
-from __future__ import division
 import os 
 import sys
 import numpy as np
@@ -33,23 +32,20 @@ def train_step(model, sup_criterion, unsup_criterion, noise_strength, x, y=None)
     """
     logits, embedding = model(x)
 
-
     x_n = add_noise(x, noise_strength)
     logits_n, embedding_n = model(x_n)
-    loss = unsup_criterion([logits, embedding], [logits_n.data, embedding_n.data])
+    loss = unsup_criterion([logits_n, embedding_n], [logits.data, embedding.data])
 
     if y is not None:
         loss += sup_criterion(logits, y)
 
-    #loss.backward()
-    #optimizer.step()
+    return loss #, output.cpu()
 
-    return loss, output.cpu()
-
-def maybe_save_model(model, opt, schd, epoch, save_path, curr_val, other_values):
-    path = ''
+def maybe_save_model(model, opt, schd, epoch, save_path, curr_val, other_values, old_path=''):
+    path = old_path
     def no_other_values(other_values):
         return len(other_values) == 0
+
     if no_other_values(other_values) or curr_val <  min(other_values):
         print('saving model...')
         path = save_train(save_path, model, opt, schd, epoch)
@@ -57,18 +53,24 @@ def maybe_save_model(model, opt, schd, epoch, save_path, curr_val, other_values)
         clean(save_path, save_count=10)
     return path
 
-def run_valid(model, data_loader, criterion, logdir, noise):
+def run_valid(model, data_loader, criterion, logdir, noise, full=False):
     loss = 0
+    acc = 0
+    _iter = 0
     for x, y in data_loader:
-
+        if _iter == 500 and not full:
+            break
+        _iter += 1
         if USE_CUDA:
             x = x.cuda()
             y = y.cuda()
 
         _logits, _ = model(x) 
-        loss = criterion(_logits, target)
+        _loss = criterion(_logits, y)
         loss += _loss.data
-    return float(loss) / len(data_loader)
+        acc += float(float((_logits.argmax(dim=1) == y).sum()) / _logits.shape[0])
+
+    return float(loss) / len(data_loader), acc / len(data_loader)
 
 def train(model, args):
     
@@ -91,11 +93,13 @@ def train(model, args):
         print('Done!')
         
     _train_label_loss = []
-    _valid_unlabel_loss = []
+    _valid_loss = []
+    _train_unlabel_loss = []
+    _model_path = ''
 
     running_label_loss = 0
     running_unlabel_loss = 0
-    valid_every = int(0.1 * len(labeled_loader)) #TODO(hillel): better idea than using labeled data as valid as well?
+    valid_every = int(0.1 * (len(labeled_loader) + len(unlabeled_loader))) #TODO(hillel): better idea than using labeled data as valid as well?
 
     itr = 0
     for e in range(args['epoch']):
@@ -103,11 +107,11 @@ def train(model, args):
         for (x, y), u in zip(cycle(labeled_loader), unlabeled_loader):
             itr += 1
 
+            u = u[0] #TODO: what the hell is u a list instead of a tensor??
             if USE_CUDA:
                 x = x.cuda()
                 y = y.cuda()
                 u = u.cuda()
-
 
             optimizer.zero_grad()
 
@@ -119,26 +123,44 @@ def train(model, args):
             _loss.backward()
             optimizer.step()
 
-            running_label_loss += float(label_loss_loss)
-            running_unlabel_loss += float(label_unloss_loss)
+            running_label_loss += float(label_loss)
+            running_unlabel_loss += float(unlabel_loss)
 
             if itr % valid_every == 0:
                 _train_label_loss.append(running_label_loss / valid_every)
                 _train_unlabel_loss.append(running_unlabel_loss / valid_every)
 
-                _v_loss = run_valid(model, valid_loader,
-                        sup_criterion, args['save_dir'], args['noise'])
+                _v_loss, acc = run_valid(
+                    model, valid_loader,
+                    sup_criterion, args['save_dir'],
+                    args['noise']
+                )
                 scheduler.step(_v_loss)
+
                 _model_path = maybe_save_model(model, optimizer,
                         scheduler, e, args['save_dir'],
-                        _v_loss, _valid_loss)
-                if _model_path != '':
-                    model_path = _model_path
+                        _v_loss, _valid_loss, _model_path)
+
                 _valid_loss.append(_v_loss)
-                print("epoch {} train loss: {} valid loss: {}".format(e,
-                    running_loss / valid_every, _v_loss))
+
+                print("epoch {} train loss labeld: {} train unlabeld loss: {} valid loss: {} valid accuracy {}".format(e,
+                      running_label_loss / valid_every, running_unlabel_loss /
+                      valid_every, _v_loss, acc))
+
+                running_label_loss = 0
+                runninig_unlabel_loss = 0
                 running_loss = 0
-    return model_path, _valid_loss[-1]
+
+    #TODO(hillel): make this run test
+    _, acc = run_valid(
+        model, valid_loader,
+        sup_criterion, args['save_dir'],
+        args['noise'],
+        full=True
+    )
+
+
+    return _model_path, acc
 
 def build_model(args):
     model = LISTAConvDictADMM(
@@ -151,8 +173,8 @@ def build_model(args):
     )
     model = LISTAConvDictMNISTSSL(
         embedding_model=model,
-        embedding_size=64,
-        hidden_size=1000
+        embedding_size=args['kc'] * 28 ** 2,
+        hidden_size=[120, 84]
     )
     if USE_CUDA:
         model = model.cuda()
@@ -169,7 +191,7 @@ def run(args_file):
 
     args['test_args']['load_path'] = model_path
     args['test_args']['embedd_model_path'] = model_path
-    args['train_args']['final_loss'] = valid_loss
+    args['train_args']['final_acc'] = valid_loss
     args['test_args']['log_dir'] = log_dir
 
     args_fp = os.path.join(log_dir, 'params.json')

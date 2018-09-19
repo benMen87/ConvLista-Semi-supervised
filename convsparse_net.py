@@ -17,20 +17,25 @@ class LISTAConvDictMNISTSSL(nn.Module):
     num_of_classes = 10
 
     def __init__(self, embedding_model, embedding_size, hidden_size, downsample=2):
+
+        super(LISTAConvDictMNISTSSL, self).__init__()
+
         self.embedding_model = embedding_model
         self.downsample_by = downsample
-        self.input_class_sz = embedding_size // (self.downsample_by ** 2)
+        self.input_dowsampeled_embedding_size = embedding_size // (self.downsample_by ** 2)
 
         self.classifier_model = nn.Sequential(
-           nn.Linear(self.input_class_sz, hidden_size),
+           nn.Linear(self.input_dowsampeled_embedding_size, hidden_size[0]),
            nn.ReLU(),
-           nn.Linear(hidden_size, self.num_of_classes)
+           nn.Linear(hidden_size[0], hidden_size[1]),
+           nn.ReLU(),
+           nn.Linear(hidden_size[1], self.num_of_classes)
         )
 
     #TODO(hillel): for training we need  2 diffrent models for training and infrence...
-    def forward(self, inputs): 
+    def forward(self, inputs):
         _, embedding = self.embedding_model(inputs)
-        embedding_flatten = F.max_pool2d(embedding, 2).veiw(-1, self.input_class_sz)
+        embedding_flatten = F.max_pool2d(embedding, 2).view(embedding.shape[0], -1)
         logits = self.classifier_model(embedding_flatten)
         return logits, embedding_flatten
 
@@ -95,7 +100,6 @@ class LISTAConvDictADMM(nn.Module):
         self.encode_conv[1].weight.data = we
 
     def forward_enc(self, inputs):
-        #print('thersh max: {}\n'.format(np.max(self.softthrsh._lambd.cpu().data.numpy())))
         sc = self.softthrsh(self.encode_conv(inputs))
 
         for step in range(self._ista_iters):

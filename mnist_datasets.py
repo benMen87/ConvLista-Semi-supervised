@@ -133,7 +133,7 @@ def semisup_mnist(lbl_cnt=3000, path=DATA_PATH, batch_size=64):
     u_data = torch.stack(u_data)[torch.randperm(len(u_data))]
 
     labeled = TensorDataset(l_data, labels.long())
-    unlabeled = TensorDataset(u_data)
+    unlabeled = TensorDataset(u_data,)
 
     dll = torch.utils.data.DataLoader(
         labeled, batch_size=batch_size, shuffle=False

@@ -16,9 +16,15 @@ from  mnist_datasets import get_train_valid_loader, get_test_loader
 import matplotlib
 #matplotlib.use('agg')
 import matplotlib.pyplot as plt
+import pprint
 
 USE_CUDA = torch.cuda.is_available()
 FILE_PATH = os.path.dirname(os.path.abspath(__file__))
+
+
+def _pprint(stuff):
+    pp = pprint.PrettyPrinter(indent=4)
+    pp.pprint(stuff)
 
 def add_noise(imgs, noise):
     noise = common.normalize(noise)
@@ -116,6 +122,9 @@ def train(model, args):
     return model_path, _valid_loss[-1]
 
 def build_model(args):
+    print('model args:')
+    _pprint(args)
+
     model = LISTAConvDictADMM(
         num_input_channels=args['num_input_channels'],
         num_output_channels=args['num_output_channels'],
