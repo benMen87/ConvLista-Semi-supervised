@@ -22,6 +22,7 @@ def get_train_valid_loader(data_dir=DATA_PATH,
                            augment=True,
                            random_seed=RANDOM_SEED,
                            valid_size=0.1,
+                           lable_count=1000,
                            shuffle=True,
                            show_sample=False,
                            num_workers=1,
@@ -34,7 +35,7 @@ def get_train_valid_loader(data_dir=DATA_PATH,
     ])
     if augment:
         train_transform = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
+            transforms.RandomCrop(28, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
         ])
@@ -147,3 +148,15 @@ def semisup_mnist(lbl_cnt=3000, path=DATA_PATH, batch_size=64):
 
     
     
+if __name__ == '__main__':
+    get_train_valid_loader(data_dir=DATA_PATH,
+                           batch_size=32,
+                           augment=True,
+                           random_seed=RANDOM_SEED,
+                           valid_size=0.1,
+                           lable_count=1000,
+                           shuffle=True,
+                           show_sample=False,
+                           num_workers=1,
+                           pin_memory=False)
+

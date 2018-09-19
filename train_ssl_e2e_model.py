@@ -8,11 +8,11 @@ from torch import optim
 from torch.optim import lr_scheduler
 from convsparse_net import LISTAConvDictADMM, LISTAConvDictMNISTSSL
 import common
-from common import save_train, load_train, clean
+from common import save_train, load_train, load_eval, clean, _pprint
 from common import get_sup_criterion, get_unsup_criterion, init_model_dir
-from torch.utils.data import DataLoader
 import arguments
-from  mnist_datasets import semisup_mnist, get_test_loader
+from  mnist_datasets import get_test_loader
+from  split_mnist import get_train_loaders
 import matplotlib
 #matplotlib.use('agg')
 import matplotlib.pyplot as plt
@@ -30,6 +30,7 @@ def train_step(model, sup_criterion, unsup_criterion, noise_strength, x, y=None)
     x, y - input and its label
     u - unlabeld input
     """
+
     logits, embedding = model(x)
 
     x_n = add_noise(x, noise_strength)
@@ -53,38 +54,37 @@ def maybe_save_model(model, opt, schd, epoch, save_path, curr_val, other_values,
         clean(save_path, save_count=10)
     return path
 
-def run_valid(model, data_loader, criterion, logdir, noise, full=False):
+def run_valid(model, data_loader, criterion):
     loss = 0
     acc = 0
     _iter = 0
     for x, y in data_loader:
-        if _iter == 500 and not full:
-            break
         _iter += 1
         if USE_CUDA:
             x = x.cuda()
             y = y.cuda()
-
         _logits, _ = model(x) 
         _loss = criterion(_logits, y)
         loss += _loss.data
         acc += float(float((_logits.argmax(dim=1) == y).sum()) / _logits.shape[0])
-
     return float(loss) / len(data_loader), acc / len(data_loader)
 
 def train(model, args):
-    
+
     optimizer = optim.Adam(model.parameters(), lr=args['learning_rate'])
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, 'min', verbose=True)
     sup_criterion = get_sup_criterion(use_cuda=USE_CUDA)
     unsup_criterion = get_unsup_criterion(args['unsup_factors'])
 
-    labeled_loader, unlabeled_loader = semisup_mnist(batch_size=args['batch_size'], lbl_cnt=args["label_count"])
-    valid_loader = get_test_loader()
+    labeled_loader, unlabeled_loader, valid_loader =\
+    get_train_loaders(labeled_size=args["label_count"], valid_size=5000, batch_size=args['batch_size'], pin_memory=USE_CUDA)
+    # valid_loader = get_test_loader()
 
-    print(args)
+    print('Running Train\ntrain args:\n')
+    _pprint(args)
 
-    print('labeld count: {}  unlabeled count: {}'.format(len(labeled_loader), len(unlabeled_loader)))
+    print('labeld count: {}  unlabeled count: {}'.\
+        format(len(labeled_loader), len(unlabeled_loader)))
 
     if args['load_path'] != '':
         ld_p = args['load_path']
@@ -99,21 +99,25 @@ def train(model, args):
 
     running_label_loss = 0
     running_unlabel_loss = 0
-    valid_every = int(0.1 * (len(labeled_loader) + len(unlabeled_loader))) #TODO(hillel): better idea than using labeled data as valid as well?
+    valid_every =\
+     int(0.1 * (len(labeled_loader) + len(unlabeled_loader)))
 
     itr = 0
+    unsupervised_epochs = args['unsupervised_epochs']
     for e in range(args['epoch']):
         print('Epoch number {}'.format(e))
-        for (x, y), u in zip(cycle(labeled_loader), unlabeled_loader):
+        for (x, y), (u, _) in zip(cycle(labeled_loader), unlabeled_loader):
             itr += 1
 
-            u = u[0] #TODO: what the hell is u a list instead of a tensor??
             if USE_CUDA:
                 x = x.cuda()
                 y = y.cuda()
                 u = u.cuda()
 
             optimizer.zero_grad()
+
+            if e < unsupervised_epochs:
+                y = None
 
             label_loss = train_step(model, sup_criterion, unsup_criterion, args['noise'], x, y)
             unlabel_loss = train_step(model, sup_criterion, unsup_criterion, args['noise'], u)
@@ -143,24 +147,47 @@ def train(model, args):
 
                 _valid_loss.append(_v_loss)
 
-                print("epoch {} train loss labeld: {} train unlabeld loss: {} valid loss: {} valid accuracy {}".format(e,
-                      running_label_loss / valid_every, running_unlabel_loss /
-                      valid_every, _v_loss, acc))
+                if e > unsupervised_epochs:
+                    print("epoch ssl {}:{} train loss labeld: {} train unlabeld loss: {}\
+                        valid loss: {} valid accuracy {}".format(
+                        e, args['epoch'],
+                        running_label_loss / valid_every, running_unlabel_loss /
+                        valid_every, _v_loss, acc))
+                else: 
+                    avg_train_loss = ((running_label_loss + running_unlabel_loss) /
+                                        (valid_every * 2))
+                    print("epoch unsupervised {}:{} train loss {}\
+                        valid loss: {} valid accuracy {}".format(
+                        e, args['epoch'], avg_train_loss , _v_loss, acc))
 
                 running_label_loss = 0
                 runninig_unlabel_loss = 0
                 running_loss = 0
 
-    #TODO(hillel): make this run test
     _, acc = run_valid(
         model, valid_loader,
-        sup_criterion, args['save_dir'],
-        args['noise'],
-        full=True
+        sup_criterion
     )
-
-
     return _model_path, acc
+
+def test(model, args):
+
+    print("Running test\n")
+    _pprint(args)
+
+    ld_p = args['load_path']
+    print('loading from %s'%ld_p)
+    load_eval(ld_p, model)        
+    print('Done!')
+
+    test_loader = get_test_loader(batch_size=32, pin_memory=USE_CUDA)
+    sup_criterion = get_sup_criterion(use_cuda=USE_CUDA)
+    loss, acc = \
+        run_valid(model, data_loader=test, criterion=sup_criterion)
+    print('#'*10)
+    print('final evaluation on test set - \nloss: {} \naccuracy: {}'.format(loss, acc))
+    print('#'*10)
+    return loss, acc
 
 def build_model(args):
     model = LISTAConvDictADMM(
@@ -190,20 +217,23 @@ def run(args_file):
     model_path, valid_loss = train(model, args['train_args'])
 
     args['test_args']['load_path'] = model_path
-    args['test_args']['embedd_model_path'] = model_path
     args['train_args']['final_acc'] = valid_loss
     args['test_args']['log_dir'] = log_dir
+    test_loss, test_acc = test(model, args['test_args'])
+    args['test_args']['final_loss'] = test_loss
+    args['test_args']['final_acc'] = test_loss
 
     args_fp = os.path.join(log_dir, 'params.json')
     arguments.logdictargs(args_fp, args)
     print("writing {} to  {}".format(args_fp, args))
+
     return args_fp
 
 
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--arg_file', default='./default_ssl_e2e_args.json')
-    arg_file = parser.parse_args().arg_file
+    parser.add_argument('--args_file', default='./default_ssl_e2e_args.json')
+    args_file = parser.parse_args().args_file
 
-    run(arg_file)
+    run(args_file)

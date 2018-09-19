@@ -4,7 +4,11 @@ import torch
 from torch.autograd import Variable
 import torch.nn as nn
 import numpy as np
+import pprint
 
+def _pprint(stuff):
+    pp = pprint.PrettyPrinter(indent=4)
+    pp.pprint(stuff)
 
 def to_np(_x): return _x.data.cpu().numpy()
 
@@ -74,10 +78,11 @@ def conv(in_f, out_f, kernel_size, stride=1, bias=True, pad='zero', downsample_m
     to_pad = int((kernel_size - 1) / 2)
     if pad == 'reflection':
         padder = nn.ReflectionPad2d(to_pad)
-        remove_padder = RemovePadder(to_pad)
+        print("padder padding {}".format(padder.padding))
+        # remove_padder = RemovePadder(to_pad)
 
-    convolver = nn.Conv2d(in_f, out_f, kernel_size, stride, padding=to_pad, bias=bias)
-    layers = filter(lambda x: x is not None, [padder, convolver, remove_padder, downsampler])
+    convolver = nn.Conv2d(in_f, out_f, kernel_size, stride, bias=bias)
+    layers = filter(lambda x: x is not None, [padder, convolver, downsampler])
     return nn.Sequential(*layers)
 
 def gaussian(ins, is_training, mean, stddev):
@@ -113,7 +118,7 @@ def get_unsup_criterion(factors, use_cuda=True):
     if type(factors) is not list:
         factors = [factors]
 
-    l2 = nn.L1Loss()
+    l2 = nn.MSELoss()
     def dist(out, target):
         return l2(out, target)
 
