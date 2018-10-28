@@ -22,7 +22,8 @@ class LISTAConvDictMNISTSSL(nn.Module):
 
         self.embedding_model = embedding_model
         self.downsample_by = downsample
-        self.input_dowsampeled_embedding_size = embedding_size // (self.downsample_by ** 2)
+        self.input_dowsampeled_embedding_size =\
+                embedding_size // (self.downsample_by ** 2)
 
         self.classifier_model = nn.Sequential(
            nn.Linear(self.input_dowsampeled_embedding_size, hidden_size[0]),
@@ -34,10 +35,10 @@ class LISTAConvDictMNISTSSL(nn.Module):
 
     #TODO(hillel): for training we need  2 diffrent models for training and infrence...
     def forward(self, inputs):
-        _, embedding = self.embedding_model(inputs)
+        reconstructed, embedding = self.embedding_model(inputs)
         embedding_flatten = F.max_pool2d(embedding, 2).view(embedding.shape[0], -1)
         logits = self.classifier_model(embedding_flatten)
-        return logits, embedding_flatten
+        return logits, embedding_flatten, reconstructed
 
 
 

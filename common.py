@@ -23,6 +23,7 @@ def nhwc_to_nchw(_x, keep_dims=True):
         _x = _x[...,None]
     elif len(_x.shape) == 2:  #unsqueeze N and C dim
         _x = _x[None,:,:,None]
+        np.absolute_import
     return np.transpose(_x, (0, 3, 1, 2))
 
 def get_unique_name(path):
@@ -119,10 +120,14 @@ def get_unsup_criterion(factors, use_cuda=True):
         factors = [factors]
 
     l2 = nn.MSELoss()
-    def dist(out, target):
-        return l2(out, target)
+    def criterion(out, target):
+        loss = 0
+        for f, o, t in zip(cycle(factors), out, target):
+            loss += f * l2(o, t)
+        return loss
 
-    return lambda values, targets:sum([dist(v, t) * l for v, t, l in  zip(values, targets, cycle(factors))])
+    return criterion
+
 
 def psnr(im, recon, verbose=False):
     im.shape

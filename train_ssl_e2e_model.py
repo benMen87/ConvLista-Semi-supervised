@@ -31,16 +31,22 @@ def train_step(model, sup_criterion, unsup_criterion, noise_strength, x, y=None)
     u - unlabeld input
     """
 
-    logits, embedding = model(x)
+    logits, embedding, reconstructed = model(x)
 
     x_n = add_noise(x, noise_strength)
-    logits_n, embedding_n = model(x_n)
-    loss = unsup_criterion([logits_n, embedding_n], [logits.data, embedding.data])
+    logits_n, embedding_n, reconstructed_n = model(x_n)
+    np.savez('debug', X=x, X_n=x_n)
+   # loss = unsup_criterion([reconstructed, reconstructed_n], [x, x])
+    loss_unsup = unsup_criterion(
+            [logits_n,        reconstructed_n,        embedding_n],
+            [logits.detach(), reconstructed.detach(), embedding.detach()]
+    )
 
+    loss_sup = None
     if y is not None:
-        loss += sup_criterion(logits, y)
+        loss_sup = sup_criterion(logits_n, y)
 
-    return loss #, output.cpu()
+    return loss_unsup, loss_sup #, output.cpu()
 
 def maybe_save_model(model, opt, schd, epoch, save_path, curr_val, other_values, old_path=''):
     path = old_path
@@ -63,7 +69,7 @@ def run_valid(model, data_loader, criterion):
         if USE_CUDA:
             x = x.cuda()
             y = y.cuda()
-        _logits, _ = model(x) 
+        _logits, _, _ = model(x) 
         _loss = criterion(_logits, y)
         loss += _loss.data
         acc += float(float((_logits.argmax(dim=1) == y).sum()) / _logits.shape[0])
@@ -78,7 +84,6 @@ def train(model, args):
 
     labeled_loader, unlabeled_loader, valid_loader =\
     get_train_loaders(labeled_size=args["label_count"], valid_size=5000, batch_size=args['batch_size'], pin_memory=USE_CUDA)
-    # valid_loader = get_test_loader()
 
     print('Running Train\ntrain args:\n')
     _pprint(args)
@@ -89,9 +94,9 @@ def train(model, args):
     if args['load_path'] != '':
         ld_p = args['load_path']
         print('loading from %s'%ld_p)
-        load_train(ld_p, model, optimizer, scheduler)        
+        load_train(ld_p, model, optimizer, scheduler)
         print('Done!')
-        
+
     _train_label_loss = []
     _valid_loss = []
     _train_unlabel_loss = []
@@ -119,16 +124,19 @@ def train(model, args):
             if e < unsupervised_epochs:
                 y = None
 
-            label_loss = train_step(model, sup_criterion, unsup_criterion, args['noise'], x, y)
-            unlabel_loss = train_step(model, sup_criterion, unsup_criterion, args['noise'], u)
+            ll_unsup, loss_sup =\
+                    train_step(model, sup_criterion, unsup_criterion, args['noise'], x, y)
+            ul_unsup, _ =\
+                     train_step(model, sup_criterion, unsup_criterion, args['noise'], u)
 
-            _loss = label_loss + unlabel_loss
-           
+            loss_unsup = 0.5 * (ll_unsup + ul_unsup)
+            _loss = loss_unsup + loss_sup
+
             _loss.backward()
             optimizer.step()
 
-            running_label_loss += float(label_loss)
-            running_unlabel_loss += float(unlabel_loss)
+            running_label_loss += float(loss_sup)
+            running_unlabel_loss += float(loss_unsup)
 
             if itr % valid_every == 0:
                 _train_label_loss.append(running_label_loss / valid_every)
@@ -147,17 +155,17 @@ def train(model, args):
 
                 _valid_loss.append(_v_loss)
 
-                if e > unsupervised_epochs:
-                    print("epoch ssl {}:{} train loss labeld: {} train unlabeld loss: {}\
-                        valid loss: {} valid accuracy {}".format(
+                if e >= unsupervised_epochs:
+                    line = "epoch ssl {}:{} train loss labeld: {} "
+                    line += "train unlabeld loss: {}valid loss: {} valid accuracy {}"
+                    print(line.format(
                         e, args['epoch'],
                         running_label_loss / valid_every, running_unlabel_loss /
                         valid_every, _v_loss, acc))
                 else: 
                     avg_train_loss = ((running_label_loss + running_unlabel_loss) /
                                         (valid_every * 2))
-                    print("epoch unsupervised {}:{} train loss {}\
-                        valid loss: {} valid accuracy {}".format(
+                    print("epoch unsupervised {}:{} train loss {} valid loss: {} valid accuracy {}".format(
                         e, args['epoch'], avg_train_loss , _v_loss, acc))
 
                 running_label_loss = 0
@@ -177,13 +185,13 @@ def test(model, args):
 
     ld_p = args['load_path']
     print('loading from %s'%ld_p)
-    load_eval(ld_p, model)        
+    load_eval(ld_p, model)
     print('Done!')
 
     test_loader = get_test_loader(batch_size=32, pin_memory=USE_CUDA)
     sup_criterion = get_sup_criterion(use_cuda=USE_CUDA)
     loss, acc = \
-        run_valid(model, data_loader=test, criterion=sup_criterion)
+        run_valid(model, data_loader=test_loader, criterion=sup_criterion)
     print('#'*10)
     print('final evaluation on test set - \nloss: {} \naccuracy: {}'.format(loss, acc))
     print('#'*10)
@@ -193,7 +201,7 @@ def build_model(args):
     model = LISTAConvDictADMM(
         num_input_channels=args['num_input_channels'],
         num_output_channels=args['num_output_channels'],
-        kc=args['kc'], 
+        kc=args['kc'],
         ks=args['ks'],
         ista_iters=args['ista_iters'],
         iter_weight_share=args['iter_weight_share'],
@@ -217,11 +225,13 @@ def run(args_file):
     model_path, valid_loss = train(model, args['train_args'])
 
     args['test_args']['load_path'] = model_path
-    args['train_args']['final_acc'] = valid_loss
+    args['train_args']['valid_acc'] = valid_loss
     args['test_args']['log_dir'] = log_dir
+
     test_loss, test_acc = test(model, args['test_args'])
+
     args['test_args']['final_loss'] = test_loss
-    args['test_args']['final_acc'] = test_loss
+    args['test_args']['final_acc'] = test_acc
 
     args_fp = os.path.join(log_dir, 'params.json')
     arguments.logdictargs(args_fp, args)
